@@ -55,6 +55,14 @@ func main() {
 	fmt.Printf("Trance: %+v\n", chance.GetFileByUUID(trance.UUID()))
 	fmt.Printf("Chance: %+v\n", chance.GetDirectoryByUUID(chance.UUID()))
 	fmt.Printf("PantsV2: %+v\n", chance.GetVersionByUUID(pantsV2.UUID()))
+
+	fmt.Println("=====")
+
+	dumpDirectory(chance.GetVersionByUUID(pantsV2.UUID()).File().Directory(), 0)
+
+	fmt.Println("=====")
+
+	dumpDirectory(chance.GetVersionByUUID(tranceV2.UUID()).File().Directory(), 0)
 }
 
 func dumpDirectory(d *mds.Directory, level int) {
