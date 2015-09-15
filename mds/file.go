@@ -43,6 +43,7 @@ func (f *File) addVersion(v *Version) error {
 		defer f.Unlock()
 		if f.versions[v.uuid] == nil {
 			f.versions[v.uuid] = v
+			f.directory.addFileVersion(v)
 			return nil
 		}
 		return errors.New("ERROR") // FIXME: error should be made useful
@@ -56,6 +57,7 @@ func (f *File) removeVersion(v *Version) error {
 		defer f.Unlock()
 		if f.versions[v.uuid] == v {
 			delete(f.versions, v.uuid)
+			f.directory.removeFileVersion(v)
 			return nil
 		}
 		return errors.New("ERROR") // FIXME: error should be made useful

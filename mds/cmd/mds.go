@@ -49,6 +49,12 @@ func main() {
 	if p2f != nil {
 		dumpFile(p2f, 10)
 	}
+
+	fmt.Println("=====")
+
+	fmt.Printf("Trance: %+v\n", chance.GetFileByUUID(trance.UUID()))
+	fmt.Printf("Chance: %+v\n", chance.GetDirectoryByUUID(chance.UUID()))
+	fmt.Printf("PantsV2: %+v\n", chance.GetVersionByUUID(pantsV2.UUID()))
 }
 
 func dumpDirectory(d *mds.Directory, level int) {

@@ -9,12 +9,15 @@ import (
 
 // Directory is a place to store Directory entries and File entries
 type Directory struct {
-	uuid        uuid.UUID
-	name        string
-	parent      *Directory
-	files       map[uuid.UUID]*File
-	directories map[uuid.UUID]*Directory
-	entries     map[string]interface{}
+	uuid              uuid.UUID
+	name              string
+	parent            *Directory
+	files             map[uuid.UUID]*File
+	directories       map[uuid.UUID]*Directory
+	entries           map[string]interface{}
+	masterFiles       map[uuid.UUID]*File
+	masterDirectories map[uuid.UUID]*Directory
+	masterVersions    map[uuid.UUID]*Version
 	sync.RWMutex
 }
 
@@ -34,20 +37,33 @@ func NewDirectory(name string, parent *Directory) *Directory {
 		directories: make(map[uuid.UUID]*Directory),
 		entries:     make(map[string]interface{}),
 	}
-	err := parent.addChildDirectory(d)
-	if err != nil {
-		panic(err)
+	if d.parent == nil {
+		d.masterFiles = make(map[uuid.UUID]*File)
+		d.masterDirectories = make(map[uuid.UUID]*Directory)
+		d.masterVersions = make(map[uuid.UUID]*Version)
+		d.masterDirectories[d.uuid] = d
+	} else {
+		err := parent.addChildDirectory(d)
+		if err != nil {
+			panic(err)
+		}
 	}
 	return d
 }
 
 func (d *Directory) addChildDirectory(child *Directory) error {
 	if d != nil {
+		rootDir := d.Root()
+		if !d.IsRoot() {
+			rootDir.Lock()
+			defer rootDir.Unlock()
+		}
 		d.Lock()
 		defer d.Unlock()
 		if d.entries[child.name] == nil {
 			d.directories[child.uuid] = child
 			d.entries[child.name] = child
+			rootDir.masterDirectories[child.uuid] = child
 			return nil
 		}
 		return errors.New("ERROR") // FIXME: error should be made useful
@@ -57,11 +73,17 @@ func (d *Directory) addChildDirectory(child *Directory) error {
 
 func (d *Directory) removeChildDirectory(child *Directory) error {
 	if d != nil {
+		rootDir := d.Root()
+		if !d.IsRoot() {
+			rootDir.Lock()
+			defer rootDir.Unlock()
+		}
 		d.Lock()
 		defer d.Unlock()
 		if d.entries[child.name] == child {
 			delete(d.directories, child.uuid)
 			delete(d.entries, child.name)
+			delete(rootDir.masterDirectories, child.uuid)
 			return nil
 		}
 		return errors.New("ERROR") // FIXME: error should be made useful
@@ -85,11 +107,17 @@ func (d *Directory) renameChildDirectory(child *Directory, oldname string, newna
 
 func (d *Directory) addFile(f *File) error {
 	if d != nil {
+		rootDir := d.Root()
+		if !d.IsRoot() {
+			rootDir.Lock()
+			defer rootDir.Unlock()
+		}
 		d.Lock()
 		defer d.Unlock()
 		if d.entries[f.name] == nil {
 			d.files[f.uuid] = f
 			d.entries[f.name] = f
+			rootDir.masterFiles[f.uuid] = f
 			return nil
 		}
 		return errors.New("ERROR") // FIXME: error should be made useful
@@ -99,14 +127,40 @@ func (d *Directory) addFile(f *File) error {
 
 func (d *Directory) removeFile(f *File) error {
 	if d != nil {
+		rootDir := d.Root()
+		if !d.IsRoot() {
+			rootDir.Lock()
+			defer rootDir.Unlock()
+		}
 		d.Lock()
 		defer d.Unlock()
 		if d.entries[f.name] == f {
 			delete(d.files, f.uuid)
 			delete(d.entries, f.name)
+			delete(rootDir.masterFiles, f.uuid)
 			return nil
 		}
 		return errors.New("ERROR") // FIXME: error should be made useful
+	}
+	return nil
+}
+
+func (d *Directory) addFileVersion(v *Version) error {
+	if d != nil {
+		rootDir := d.Root()
+		rootDir.Lock()
+		defer rootDir.Unlock()
+		rootDir.masterVersions[v.uuid] = v
+	}
+	return nil
+}
+
+func (d *Directory) removeFileVersion(v *Version) error {
+	if d != nil {
+		rootDir := d.Root()
+		rootDir.Lock()
+		defer rootDir.Unlock()
+		delete(rootDir.masterVersions, v.uuid)
 	}
 	return nil
 }
@@ -206,4 +260,42 @@ func (d *Directory) GetByName(name string) (*Directory, *File, error) {
 		}
 	}
 	return nil, nil, errors.New("ERROR B")
+}
+
+// IsRoot returns bool if this Directory is root
+func (d *Directory) IsRoot() bool {
+	return d.parent == nil
+}
+
+// Root returns the root directory
+func (d *Directory) Root() *Directory {
+	rootDir := d
+	for rootDir.parent != nil {
+		rootDir = rootDir.parent
+	}
+	return rootDir
+}
+
+// GetDirectoryByUUID returns a Directory by UUID
+// This gets it from the Directory's Root()
+func (d *Directory) GetDirectoryByUUID(u uuid.UUID) *Directory {
+	d.RLock()
+	defer d.RUnlock()
+	return d.Root().masterDirectories[u]
+}
+
+// GetFileByUUID returns a File by UUID
+// This gets it from the Directory's Root()
+func (d *Directory) GetFileByUUID(u uuid.UUID) *File {
+	d.RLock()
+	defer d.RUnlock()
+	return d.Root().masterFiles[u]
+}
+
+// GetVersionByUUID returns a File by UUID
+// This gets it from the Directory's Root()
+func (d *Directory) GetVersionByUUID(u uuid.UUID) *Version {
+	d.RLock()
+	defer d.RUnlock()
+	return d.Root().masterVersions[u]
 }
